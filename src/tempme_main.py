@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import CLIPVisionModel, CLIPProcessor, CLIPTokenizer, CLIPModel
-from PIL import Image
+import utils
 
 
 def cross_clip_merging(tokens, reduction_ratio):
@@ -134,3 +134,15 @@ class TempMe(nn.Module):
         tokens = self.ln2(tokens + ffn_out)
         
         return tokens
+
+def main():
+    video_frames = utils.load_video("./data/dog.mp4")
+    tempme = TempMe()
+    processed_video = tempme(video_frames)
+    #print(f"{processed_video.size()}")
+    #caption = generate_video_caption(processed_video,tempme)
+    #print(caption)
+
+
+if __name__ == '__main__':
+    main()
