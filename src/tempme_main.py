@@ -83,3 +83,54 @@ def img_me_block(tokens, reduction_ratio):
         tokens[b] = tokens[a]
 
     return tokens[:N - num_merge]
+
+class TempMe(nn.Module):
+    def __init__(self, model_name="openai/clip-vit-base-patch32", reduction_ratio=0.5):
+        """Video Processor using CLIP-ViT as the backbone."""
+        super().__init__()
+        self.clip_model = CLIPVisionModel.from_pretrained(model_name)
+        self.processor = CLIPProcessor.from_pretrained(model_name)
+        self.cross_clip_merging = cross_clip_merging
+        self.intra_clip_merging = intra_clip_merging
+        self.img_me_block = img_me_block
+        self.attn = nn.MultiheadAttention(self.clip_model.config.hidden_size, 8, batch_first=True)
+        self.ln1 = nn.LayerNorm(self.clip_model.config.hidden_size)
+        self.ln2 = nn.LayerNorm(self.clip_model.config.hidden_size)
+        self.ffn = nn.Sequential(
+            nn.Linear(self.clip_model.config.hidden_size, self.clip_model.config.hidden_size * 4),
+            nn.GELU(),
+            nn.Linear(self.clip_model.config.hidden_size * 4, self.clip_model.config.hidden_size)
+        )
+        self.reduction_ratio = reduction_ratio
+
+    def forward(self, video_frames):
+        """Process input video frames using CLIP-ViT.
+        Args:
+            video_frames (list of PIL images): Input video frames.
+        Returns:
+            torch.Tensor: Processed video features with reduced redundancy.
+        """
+        inputs = self.processor(images=video_frames, return_tensors="pt")
+        with torch.no_grad():
+            video_features = self.clip_model(**inputs).last_hidden_state  # Shape: (B, N, D)
+        
+        tokens = video_features.view(video_features.shape[0], -1, video_features.shape[-1])
+        
+        # Apply Image Merging Block
+        tokens = self.img_me_block(tokens, self.reduction_ratio)
+        
+        # Apply Cross-clip merging
+        tokens = self.cross_clip_merging(tokens, self.reduction_ratio)
+        
+        # Apply Attention Mechanism
+        attn_out, _ = self.attn(tokens, tokens, tokens)
+        tokens = self.ln1(tokens + attn_out)
+        
+        # Apply Intra-clip merging
+        tokens = self.intra_clip_merging(tokens, self.reduction_ratio / 2)
+        
+        # Apply Feedforward
+        ffn_out = self.ffn(tokens)
+        tokens = self.ln2(tokens + ffn_out)
+        
+        return tokens
