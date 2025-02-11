@@ -1,24 +1,22 @@
 import cv2
 from PIL import Image
 
-def load_video(video_path, frame_interval=5):
-    """Loads video frames from a given file path.
-    Args:
-        video_path (str): Path to the video file.
-        frame_interval (int): Extract every N-th frame.
-    Returns:
-        list: List of PIL image frames.
-    """
+'''
+프레임 추출 함수 (비디오 → 이미지)
+'''
+
+def extract_frames(video_path, num_frames=8):
     cap = cv2.VideoCapture(video_path)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frames = []
-    count = 0
-    while cap.isOpened():
+
+    indices = np.linspace(0, frame_count - 1, num_frames, dtype=int)
+    for idx in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
-        if not ret:
-            break
-        if count % frame_interval == 0:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # BGR → RGB 변환
             frames.append(Image.fromarray(frame))
-        count += 1
+    
     cap.release()
     return frames
