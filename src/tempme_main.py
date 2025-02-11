@@ -9,9 +9,10 @@ from transformers import CLIPProcessor, CLIPModel
 from peft import get_peft_model, LoraConfig, TaskType
 
 
-# ==============================
-# 1. 프레임 추출 함수 (비디오 → 이미지)
-# ==============================
+'''
+1. 프레임 추출 함수 (비디오 → 이미지)
+'''
+
 def extract_frames(video_path, num_frames=8):
     cap = cv2.VideoCapture(video_path)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -29,9 +30,9 @@ def extract_frames(video_path, num_frames=8):
     return frames
 
 
-# ==============================
-# 2. TEMPME 블록 정의
-# ==============================
+'''
+2. TEMPME 블록 정의
+'''
 
 class ImgMeBlock(nn.Module):
     def __init__(self, embed_dim, reduction_ratio=0.5):
@@ -87,26 +88,6 @@ class IntraClipMerging(nn.Module):
         merged_clip_embeddings = selected_embeddings.mean(dim=1, keepdim=True)
         return merged_clip_embeddings
     
-# ==============================
-# 2. TEMPME 블록 정의
-# ==============================
-
-class ImgMeBlock(nn.Module):
-    def __init__(self, embed_dim, reduction_ratio=0.5):
-        super(ImgMeBlock, self).__init__()
-        self.embed_dim = embed_dim
-        self.reduction_ratio = reduction_ratio
-        self.token_importance = nn.Linear(embed_dim, 1)
-
-    def forward(self, token_embeddings):
-        batch_size, num_tokens, embed_dim = token_embeddings.shape
-        token_scores = self.token_importance(token_embeddings).squeeze(-1)
-        token_weights = F.softmax(token_scores, dim=-1)
-        num_tokens_to_keep = int(num_tokens * (1 - self.reduction_ratio))
-        _, top_indices = torch.topk(token_weights, num_tokens_to_keep, dim=-1, largest=True)
-        merged_embeddings = torch.gather(token_embeddings, 1, top_indices.unsqueeze(-1).expand(-1, -1, embed_dim))
-        return merged_embeddings
-
 class TEMPMEBlock(nn.Module):
     def __init__(self, embed_dim, img_reduction=0.5, cross_merge_ratio=0.5, intra_merge_ratio=0.5):
         super(TEMPMEBlock, self).__init__()
@@ -124,10 +105,10 @@ class TEMPMEBlock(nn.Module):
         return final_clips
     
 if __name__ == '__main__':
-    # ==============================
-    # 3. CLIP + LoRA + TEMPME 실행
-    # ==============================
-
+    '''
+    CLIP + LoRA + TEMPME 실행
+    '''
+    
     model_name = "openai/clip-vit-base-patch32"
     model = CLIPModel.from_pretrained(model_name)
     processor = CLIPProcessor.from_pretrained(model_name)
