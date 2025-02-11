@@ -108,8 +108,10 @@ if __name__ == '__main__':
     '''
     CLIP + LoRA + TEMPME 실행
     '''
-    
     model_name = "openai/clip-vit-base-patch32"
+    video_path = "data/dog.mp4"
+    text_query = "A dog running in the park"
+    
     model = CLIPModel.from_pretrained(model_name)
     processor = CLIPProcessor.from_pretrained(model_name)
 
@@ -121,9 +123,8 @@ if __name__ == '__main__':
 
     model_with_lora = get_peft_model(model, lora_config)
 
-    video_path = "data/dog.mp4"
     frames = extract_frames(video_path, num_frames=8)
-    text_query = "A dog running in the park"
+    
     text_inputs = processor(text=[text_query], return_tensors="pt")
     image_inputs = processor(images=frames, return_tensors="pt", padding=True)
 
