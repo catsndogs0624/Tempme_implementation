@@ -6,48 +6,28 @@ from transformers import CLIPVisionModel, CLIPProcessor, CLIPTokenizer, CLIPMode
 import utils
 
 
+
 class CrossClipMerging(nn.Module):
-    """
-    TEMPME 논문의 ClipMe Block 중 첫 번째 단계인 Cross-Clip Merging.
-    - 연속된 클립 간 유사한 토큰을 병합하여 계산량 감소.
-    """
     def __init__(self, embed_dim, merge_ratio=0.5):
-        """
-        Args:
-            embed_dim (int): 입력 토큰 임베딩 차원.
-            merge_ratio (float): 병합할 토큰의 비율 (0.5 = 50% 병합).
-        """
         super(CrossClipMerging, self).__init__()
         self.embed_dim = embed_dim
         self.merge_ratio = merge_ratio
 
     def forward(self, clip1_embeddings, clip2_embeddings):
-        """
-        Args:
-            clip1_embeddings (Tensor): [Batch, Num_Tokens, Embed_Dim] (이전 클립의 토큰)
-            clip2_embeddings (Tensor): [Batch, Num_Tokens, Embed_Dim] (현재 클립의 토큰)
-        Returns:
-            merged_clip_embeddings (Tensor): 병합된 클립 토큰 출력
-        """
         batch_size, num_tokens, embed_dim = clip1_embeddings.shape
-
-        # 1. 코사인 유사도 계산 (두 클립의 모든 토큰 간)
         similarity_matrix = F.cosine_similarity(
-            clip1_embeddings.unsqueeze(2),  # [B, N, 1, D]
-            clip2_embeddings.unsqueeze(1),  # [B, 1, N, D]
-            dim=-1  # 임베딩 차원에서 유사도 계산
-        )  # 결과: [B, N, N] (각 클립 간 토큰 유사도 행렬)
+            clip1_embeddings.unsqueeze(2), clip2_embeddings.unsqueeze(1), dim=-1
+        )
+        num_tokens_to_keep = int(num_tokens * self.merge_ratio)
+        _, top_indices = torch.topk(similarity_matrix, k=num_tokens_to_keep, dim=-1, largest=True)
 
-        # 2. 가장 유사한 토큰 찾기 (가장 큰 유사도 값)
-        _, top_indices = torch.topk(similarity_matrix, k=int(num_tokens * self.merge_ratio), dim=-1, largest=True)
-
-        # 3. 병합할 토큰 선택 및 평균 연산
-        merged_clip_embeddings = (
-            torch.gather(clip1_embeddings, 1, top_indices.unsqueeze(-1).expand(-1, -1, embed_dim)) +
-            torch.gather(clip2_embeddings, 1, top_indices.unsqueeze(-1).expand(-1, -1, embed_dim))
-        ) / 2  # 평균 병합
-
+        top_indices = top_indices[:, :, 0]
+        expanded_indices = top_indices.unsqueeze(-1).repeat(1, 1, embed_dim)
+        selected_clip1 = torch.gather(clip1_embeddings, 1, expanded_indices)
+        selected_clip2 = torch.gather(clip2_embeddings, 1, expanded_indices)
+        merged_clip_embeddings = (selected_clip1 + selected_clip2) / 2
         return merged_clip_embeddings
+
 
 
 class IntraClipMerging(nn.Module):
