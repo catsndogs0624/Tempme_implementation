@@ -62,7 +62,6 @@ class ImgMeBlock(nn.Module):
         return merged_embeddings
 
 class TEMPMEBlock(nn.Module):
-    """ TEMPME 전체 블록 """
     def __init__(self, embed_dim, img_reduction=0.5, cross_merge_ratio=0.5, intra_merge_ratio=0.5):
         super(TEMPMEBlock, self).__init__()
         self.imgme_block = ImgMeBlock(embed_dim, reduction_ratio=img_reduction)
@@ -70,26 +69,14 @@ class TEMPMEBlock(nn.Module):
         self.intra_clip_merging = IntraClipMerging(embed_dim, merge_ratio=intra_merge_ratio)
 
     def forward(self, clip_embeddings_list):
-        """
-        Args:
-            clip_embeddings_list (list of Tensors): [Clip1, Clip2, ..., ClipN] (각 클립의 토큰)
-        Returns:
-            processed_clips (list of Tensors): 병합이 적용된 클립 리스트
-        """
-        # Step 1: 각 클립의 토큰에 ImgMe Block 적용
         processed_clips = [self.imgme_block(clip) for clip in clip_embeddings_list]
-
-        # Step 2: Cross-Clip Merging 적용
-        cross_merged_clips = []
-        for i in range(len(processed_clips) - 1):
-            merged_clip = self.cross_clip_merging(processed_clips[i], processed_clips[i + 1])
-            cross_merged_clips.append(merged_clip)
-
-        # Step 3: Intra-Clip Merging 적용
+        cross_merged_clips = [
+            self.cross_clip_merging(processed_clips[i], processed_clips[i + 1])
+            for i in range(len(processed_clips) - 1)
+        ]
         final_clips = [self.intra_clip_merging(clip) for clip in cross_merged_clips]
-
         return final_clips
-
+    
 def main():
     video_frames = utils.load_video("./data/dog.mp4")
     tempme = TEMPMEBlock()
