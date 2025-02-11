@@ -28,46 +28,21 @@ class CrossClipMerging(nn.Module):
         merged_clip_embeddings = (selected_clip1 + selected_clip2) / 2
         return merged_clip_embeddings
 
-
-
 class IntraClipMerging(nn.Module):
-    """
-    TEMPME 논문의 ClipMe Block 중 두 번째 단계인 Intra-Clip Merging.
-    - 개별 클립 내에서 유사한 토큰을 병합하여 연산량 감소.
-    """
     def __init__(self, embed_dim, merge_ratio=0.5):
-        """
-        Args:
-            embed_dim (int): 입력 토큰 임베딩 차원.
-            merge_ratio (float): 병합할 토큰의 비율 (0.5 = 50% 병합).
-        """
         super(IntraClipMerging, self).__init__()
         self.embed_dim = embed_dim
         self.merge_ratio = merge_ratio
 
     def forward(self, clip_embeddings):
-        """
-        Args:
-            clip_embeddings (Tensor): [Batch, Num_Tokens, Embed_Dim] (현재 클립의 토큰)
-        Returns:
-            merged_clip_embeddings (Tensor): 병합된 클립 토큰 출력
-        """
         batch_size, num_tokens, embed_dim = clip_embeddings.shape
-
-        # 1. 코사인 유사도 계산 (각 토큰 간 유사도 행렬)
         similarity_matrix = F.cosine_similarity(
-            clip_embeddings.unsqueeze(2),  # [B, N, 1, D]
-            clip_embeddings.unsqueeze(1),  # [B, 1, N, D]
-            dim=-1
-        )  # 결과: [B, N, N] (클립 내 토큰 간 유사도 행렬)
-
-        # 2. 가장 유사한 토큰 찾기 (가장 큰 유사도 값)
-        _, top_indices = torch.topk(similarity_matrix, k=int(num_tokens * self.merge_ratio), dim=-1, largest=True)
-
-        # 3. 병합할 토큰 선택 및 가중 평균 연산
+            clip_embeddings.unsqueeze(2), clip_embeddings.unsqueeze(1), dim=-1
+        )
+        num_tokens_to_keep = int(num_tokens * self.merge_ratio)
+        _, top_indices = torch.topk(similarity_matrix, k=num_tokens_to_keep, dim=-1, largest=True)
         selected_embeddings = torch.gather(clip_embeddings, 1, top_indices.unsqueeze(-1).expand(-1, -1, embed_dim))
-        merged_clip_embeddings = selected_embeddings.mean(dim=1, keepdim=True)  # 평균 병합
-
+        merged_clip_embeddings = selected_embeddings.mean(dim=1, keepdim=True)
         return merged_clip_embeddings
 
 class ImgMeBlock(nn.Module):
